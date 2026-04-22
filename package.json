@@ -1,0 +1,32 @@
+{
+  "name": "book-quiz-phase1",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "phase1": "tsx scripts/phase1-pipeline.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tailwindcss/postcss": "^4.2.4",
+    "next": "^15.5.15",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "tailwindcss": "^4.2.4",
+    "zod": "^3.25.0",
+    "zod-to-json-schema": "^3.24.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.0"
+  }
+}

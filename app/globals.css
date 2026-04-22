@@ -1,0 +1,50 @@
+@import url("https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&family=Instrument+Serif:ital@0;1&display=swap");
+@import "tailwindcss";
+
+:root {
+  --background: #f7f4ee;
+  --foreground: #211f1b;
+  --muted: #716a60;
+  --line: #ded7ca;
+  --panel: #fffdf8;
+  --accent: #295f4e;
+  --accent-weak: #e7efe9;
+  --danger: #9b3029;
+  --danger-weak: #f6e7e5;
+  --font-display: "Instrument Serif", Georgia, serif;
+  --font-body: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background: var(--background);
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
