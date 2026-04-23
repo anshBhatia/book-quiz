@@ -245,9 +245,7 @@ function SearchScreen({
       <div className="mb-8">
         <p className="mb-3 text-sm font-medium uppercase tracking-[0.12em] text-[var(--muted)]">Book Quiz</p>
         <h1 className="font-display text-5xl leading-[0.95] text-[var(--foreground)] sm:text-6xl">
-          Hello Prerna,
-          <br />
-          enter a book to check your knowledge.
+          Enter a book to check your knowledge.
         </h1>
       </div>
 
