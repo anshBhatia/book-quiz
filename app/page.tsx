@@ -1,6 +1,7 @@
 "use client";
 
 import { useReducer, useState, useEffect, useRef, type Dispatch, type FormEvent } from "react";
+import { sendGAEvent } from "@next/third-parties/google";
 import type { BookCandidate, Quiz } from "@/lib/schemas";
 
 type State = {
@@ -138,6 +139,7 @@ export default function Home() {
       return;
     }
 
+    sendGAEvent("event", "book_searched", { query });
     dispatch({ type: "search_start" });
 
     try {
@@ -155,7 +157,9 @@ export default function Home() {
   }
 
   async function createQuiz(book: BookCandidate) {
+    sendGAEvent("event", "book_selected", { book_title: book.title, author: book.authors[0] ?? "Unknown" });
     dispatch({ type: "quiz_start", book });
+    sendGAEvent("event", "quiz_started", { book_title: book.title });
 
     if (book.id === "__test__") {
       setTimeout(() => dispatch({ type: "quiz_success", quiz: TEST_QUIZ }), 12000);
@@ -172,14 +176,17 @@ export default function Home() {
           authors: book.authors,
         }),
       });
-      const data = (await response.json()) as { quiz?: Quiz; error?: string };
+      const data = (await response.json()) as { quiz?: Quiz; cached?: boolean; error?: string };
 
       if (!response.ok || !data.quiz) {
         throw new Error(data.error ?? "Quiz generation failed.");
       }
 
+      sendGAEvent("event", "quiz_generated", { book_title: book.title, was_cached: data.cached ?? false });
       dispatch({ type: "quiz_success", quiz: data.quiz });
-    } catch {
+    } catch (err) {
+      const errorReason = err instanceof Error ? err.message : "unknown";
+      sendGAEvent("event", "generation_failed", { book_title: book.title, error_reason: errorReason });
       dispatch({ type: "quiz_error", error: "We could not generate a quiz for that book." });
     }
   }
@@ -224,6 +231,12 @@ export default function Home() {
           />
         )}
       </div>
+      <p className="mt-4 text-center text-sm text-[var(--muted)]">
+        Made with ♥ by{" "}
+        <a href="https://x.com/anshpng" target="_blank" rel="noopener noreferrer" className="underline hover:text-[var(--foreground)] transition-colors">
+          ansh.png
+        </a>
+      </p>
       </div>
     </main>
   );
@@ -408,6 +421,20 @@ function QuizScreen({ state, onChoose, onNext }: { state: State; onChoose: (inde
   const quiz = state.quiz!;
   const question = quiz.questions[state.currentIndex];
   const answered = state.selectedIndex !== undefined;
+  const isLastQuestion = state.currentIndex + 1 === quiz.questions.length;
+
+  function handleNext() {
+    if (isLastQuestion) {
+      const total = quiz.questions.length;
+      sendGAEvent("event", "quiz_completed", {
+        book_title: quiz.bookTitle,
+        score: state.score,
+        total,
+        percentage: Math.round((state.score / total) * 100),
+      });
+    }
+    onNext();
+  }
 
   return (
     <section className="flex flex-1 flex-col py-3">
@@ -418,7 +445,7 @@ function QuizScreen({ state, onChoose, onNext }: { state: State; onChoose: (inde
         </span>
       </div>
 
-      <h2 className="font-display text-4xl leading-tight text-[var(--foreground)]">{question.prompt}</h2>
+      <h2 className="text-[28px] font-[550] leading-tight text-[var(--foreground)]">{question.prompt}</h2>
 
       <div className="mt-7 space-y-3">
         {question.options.map((option, index) => {
@@ -463,10 +490,10 @@ function QuizScreen({ state, onChoose, onNext }: { state: State; onChoose: (inde
           <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{question.explanation}</p>
           <button
             type="button"
-            onClick={onNext}
+            onClick={handleNext}
             className="mt-5 h-12 w-full rounded-md bg-[var(--foreground)] px-4 text-sm font-semibold text-[var(--background)] transition hover:bg-black"
           >
-            {state.currentIndex + 1 === quiz.questions.length ? "See score" : "Next"}
+            {isLastQuestion ? "See score" : "Next"}
           </button>
         </div>
       )}
@@ -485,31 +512,59 @@ function scoreMessage(score: number, total: number): string {
 }
 
 function DoneScreen({ quiz, score, onReset, onRetry }: { quiz: Quiz; score: number; onReset: () => void; onRetry: () => void }) {
+  const total = quiz.questions.length;
+  const percentage = Math.round((score / total) * 100);
+
+  function handleRetry() {
+    sendGAEvent("event", "again_clicked", {
+      book_title: quiz.bookTitle,
+      previous_score: score,
+      previous_total: total,
+      previous_percentage: percentage,
+    });
+    onRetry();
+  }
+
+  function handleReset() {
+    sendGAEvent("event", "quiz_another_book_clicked", {
+      book_title: quiz.bookTitle,
+      score,
+      percentage,
+    });
+    onReset();
+  }
+
   return (
     <section className="flex flex-1 flex-col justify-center">
       <p className="mb-3 text-sm font-medium uppercase tracking-[0.12em] text-[var(--muted)]">{quiz.bookTitle}</p>
       <h2 className="font-display text-6xl leading-none">
-        {score}/{quiz.questions.length}
+        {score}/{total}
       </h2>
       <p className="mt-4 text-base leading-7 text-[var(--muted)]">
-        {scoreMessage(score, quiz.questions.length)}
+        {scoreMessage(score, total)}
       </p>
       <div className="mt-8 flex gap-3">
         <button
           type="button"
-          onClick={onRetry}
+          onClick={handleRetry}
           className="h-12 flex-1 rounded-md border border-[var(--line)] bg-[var(--panel)] px-4 text-sm font-semibold text-[var(--foreground)] transition hover:border-[var(--accent)]"
         >
           Try again
         </button>
         <button
           type="button"
-          onClick={onReset}
+          onClick={handleReset}
           className="h-12 flex-1 rounded-md bg-[var(--foreground)] px-4 text-sm font-semibold text-[var(--background)] transition hover:bg-black"
         >
           Quiz another book
         </button>
       </div>
+      <p className="mt-6 text-sm text-[var(--muted)]">
+        Got some feedback?{" "}
+        <a href="mailto:anshbhatia20@gmail.com?subject=Book Quiz Feedback" className="underline hover:text-[var(--foreground)] transition-colors">
+          Send it here
+        </a>
+      </p>
     </section>
   );
 }
