@@ -185,7 +185,19 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-dvh px-5 py-8 sm:px-8">
+    <main className="min-h-dvh">
+      {state.screen === "quiz" && state.quiz && (
+        <div className="fixed inset-x-0 top-0 z-50 h-1 bg-[var(--line)]">
+          <div
+            className="h-full bg-[var(--foreground)]"
+            style={{
+              width: `${((state.currentIndex + 1) / state.quiz.questions.length) * 100}%`,
+              transition: "width 300ms ease-out",
+            }}
+          />
+        </div>
+      )}
+      <div className="px-5 py-8 sm:px-8">
       <div className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-xl flex-col">
         {state.screen === "search" && (
           <SearchScreen state={state} onSearch={handleSearch} onSelectBook={createQuiz} dispatch={dispatch} />
@@ -204,8 +216,14 @@ export default function Home() {
         )}
 
         {state.screen === "done" && state.quiz && (
-          <DoneScreen quiz={state.quiz} score={state.score} onReset={() => dispatch({ type: "reset" })} />
+          <DoneScreen
+            quiz={state.quiz}
+            score={state.score}
+            onReset={() => dispatch({ type: "reset" })}
+            onRetry={() => state.selectedBook && createQuiz(state.selectedBook)}
+          />
         )}
+      </div>
       </div>
     </main>
   );
@@ -468,7 +486,7 @@ function scoreMessage(score: number, total: number): string {
   return "A lot slipped this time. Worth a quick revisit while it's fresh.";
 }
 
-function DoneScreen({ quiz, score, onReset }: { quiz: Quiz; score: number; onReset: () => void }) {
+function DoneScreen({ quiz, score, onReset, onRetry }: { quiz: Quiz; score: number; onReset: () => void; onRetry: () => void }) {
   return (
     <section className="flex flex-1 flex-col justify-center">
       <p className="mb-3 text-sm font-medium uppercase tracking-[0.12em] text-[var(--muted)]">{quiz.bookTitle}</p>
@@ -478,13 +496,22 @@ function DoneScreen({ quiz, score, onReset }: { quiz: Quiz; score: number; onRes
       <p className="mt-4 text-base leading-7 text-[var(--muted)]">
         {scoreMessage(score, quiz.questions.length)}
       </p>
-      <button
-        type="button"
-        onClick={onReset}
-        className="mt-8 h-12 w-full rounded-md bg-[var(--foreground)] px-4 text-sm font-semibold text-[var(--background)] transition hover:bg-black"
-      >
-        Quiz another book
-      </button>
+      <div className="mt-8 flex gap-3">
+        <button
+          type="button"
+          onClick={onRetry}
+          className="h-12 flex-1 rounded-md border border-[var(--line)] bg-[var(--panel)] px-4 text-sm font-semibold text-[var(--foreground)] transition hover:border-[var(--accent)]"
+        >
+          Try again
+        </button>
+        <button
+          type="button"
+          onClick={onReset}
+          className="h-12 flex-1 rounded-md bg-[var(--foreground)] px-4 text-sm font-semibold text-[var(--background)] transition hover:bg-black"
+        >
+          Quiz another book
+        </button>
+      </div>
     </section>
   );
 }

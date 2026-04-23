@@ -6,7 +6,7 @@ import { BookStructure, Quiz, QuizQuestion, type Quiz as QuizType } from "@/lib/
 const DEFAULT_MODEL = "gemini-2.5-flash";
 const QuizQuestionWithoutId = QuizQuestion.omit({ id: true });
 const QuizOutput = z.object({
-  questions: z.array(QuizQuestionWithoutId).length(12),
+  questions: z.array(QuizQuestionWithoutId).length(10),
 });
 
 export type QuizBookInput = {
@@ -112,9 +112,9 @@ async function generateQuiz(
   book: QuizBookInput,
   structure: z.infer<typeof BookStructure>,
 ): Promise<QuizType> {
-  const prompt = `Generate 12 multiple-choice questions about "${book.bookTitle}" for a reader who has finished the book and wants to reflect on and test their understanding.
+  const prompt = `Generate 10 multiple-choice questions about "${book.bookTitle}" for a reader who has finished the book and wants to reflect on and test their understanding.
 
-Mix: 4 event-based, 3 decision-based, 3 theme-based, 2 cause-effect.
+Mix: 3 event-based, 3 decision-based, 2 theme-based, 2 cause-effect.
 
 Rules for every question:
 - Test understanding, not trivia. Not "what color was X's shirt."

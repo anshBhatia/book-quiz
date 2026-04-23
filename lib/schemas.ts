@@ -68,7 +68,7 @@ export const Quiz = z.object({
   bookId: z.string(),
   bookTitle: z.string(),
   authors: z.array(z.string()),
-  questions: z.array(QuizQuestion).min(10).max(15),
+  questions: z.array(QuizQuestion).min(8).max(12),
   generatedAt: z.string(),
 });
 export type Quiz = z.infer<typeof Quiz>;
