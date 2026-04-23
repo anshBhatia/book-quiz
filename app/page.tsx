@@ -1,6 +1,6 @@
 "use client";
 
-import { useReducer, type Dispatch, type FormEvent } from "react";
+import { useReducer, useState, useEffect, useRef, type Dispatch, type FormEvent } from "react";
 import type { BookCandidate, Quiz } from "@/lib/schemas";
 
 type State = {
@@ -23,6 +23,7 @@ type Action =
   | { type: "search_error"; error: string }
   | { type: "quiz_start"; book: BookCandidate }
   | { type: "quiz_success"; quiz: Quiz }
+  | { type: "quiz_ready" }
   | { type: "quiz_error"; error: string }
   | { type: "choose_option"; index: number }
   | { type: "next_question" }
@@ -59,7 +60,9 @@ function reducer(state: State, action: Action): State {
         error: undefined,
       };
     case "quiz_success":
-      return { ...state, screen: "quiz", quiz: action.quiz };
+      return { ...state, quiz: action.quiz };
+    case "quiz_ready":
+      return { ...state, screen: "quiz" };
     case "quiz_error":
       return { ...state, screen: "search", error: action.error };
     case "choose_option": {
@@ -96,6 +99,28 @@ function reducer(state: State, action: Action): State {
   }
 }
 
+const TEST_BOOK: BookCandidate = {
+  id: "__test__",
+  title: "The Loading State Test",
+  authors: ["Test Author"],
+  publishedDate: "2024",
+};
+
+const TEST_QUIZ: Quiz = {
+  bookId: "__test__",
+  bookTitle: "The Loading State Test",
+  authors: ["Test Author"],
+  generatedAt: new Date().toISOString(),
+  questions: Array.from({ length: 10 }, (_, i) => ({
+    id: `q${i + 1}`,
+    category: "event" as const,
+    prompt: `This is placeholder question ${i + 1}. Which of these is the correct answer?`,
+    options: ["Distractor one", "The correct answer", "Distractor two", "Distractor three"],
+    correctIndex: 1,
+    explanation: `Explanation for question ${i + 1}. This is just a test quiz to preview the UI.`,
+  })),
+};
+
 export default function Home() {
   const [state, dispatch] = useReducer(reducer, initialState);
 
@@ -105,6 +130,11 @@ export default function Home() {
 
     if (query.length < 2) {
       dispatch({ type: "search_error", error: "Enter at least two characters." });
+      return;
+    }
+
+    if (query.toLowerCase() === "lets test it") {
+      dispatch({ type: "search_success", candidates: [TEST_BOOK] });
       return;
     }
 
@@ -126,6 +156,11 @@ export default function Home() {
 
   async function createQuiz(book: BookCandidate) {
     dispatch({ type: "quiz_start", book });
+
+    if (book.id === "__test__") {
+      setTimeout(() => dispatch({ type: "quiz_success", quiz: TEST_QUIZ }), 12000);
+      return;
+    }
 
     try {
       const response = await fetch("/api/quiz", {
@@ -156,7 +191,13 @@ export default function Home() {
           <SearchScreen state={state} onSearch={handleSearch} onSelectBook={createQuiz} dispatch={dispatch} />
         )}
 
-        {state.screen === "loading" && state.selectedBook && <LoadingScreen book={state.selectedBook} />}
+        {state.screen === "loading" && state.selectedBook && (
+          <LoadingScreen
+            book={state.selectedBook}
+            isComplete={state.quiz !== undefined}
+            onComplete={() => dispatch({ type: "quiz_ready" })}
+          />
+        )}
 
         {state.screen === "quiz" && state.quiz && (
           <QuizScreen state={state} onChoose={(index) => dispatch({ type: "choose_option", index })} onNext={() => dispatch({ type: "next_question" })} />
@@ -235,17 +276,113 @@ function SearchScreen({
   );
 }
 
-function LoadingScreen({ book }: { book: BookCandidate }) {
+function LoadingScreen({
+  book,
+  isComplete,
+  onComplete,
+}: {
+  book: BookCandidate;
+  isComplete: boolean;
+  onComplete: () => void;
+}) {
+  const [progress, setProgress] = useState(0);
+  const [overlayExiting, setOverlayExiting] = useState(false);
+  const [labelVisible, setLabelVisible] = useState(true);
+  const [label, setLabel] = useState("Reading the book…");
+  const completingRef = useRef(false);
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
+
+  // Crawl 0 → 88% over ~8s
+  useEffect(() => {
+    let current = 0;
+    const id = setInterval(() => {
+      if (completingRef.current) {
+        clearInterval(id);
+        return;
+      }
+      current += 1;
+      if (current >= 88) {
+        clearInterval(id);
+        setProgress(88);
+      } else {
+        setProgress(current);
+      }
+    }, 90);
+    return () => clearInterval(id);
+  }, []);
+
+  // When quiz arrives: rush to 100%, pause, then fade out
+  useEffect(() => {
+    if (!isComplete) return;
+    completingRef.current = true;
+    setProgress(100);
+    let t2: ReturnType<typeof setTimeout> | undefined;
+    const t1 = setTimeout(() => {
+      setOverlayExiting(true);
+      t2 = setTimeout(() => onCompleteRef.current(), 400);
+    }, 900);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [isComplete]);
+
+  // Cross-fade label only when the stage boundary changes (not on every progress tick)
+  const stage = progress >= 100 ? 3 : progress >= 70 ? 2 : progress >= 30 ? 1 : 0;
+  const prevStageRef = useRef(0);
+  useEffect(() => {
+    if (stage === prevStageRef.current) return;
+    prevStageRef.current = stage;
+    setLabelVisible(false);
+    const id = setTimeout(() => {
+      setLabel(["Reading the book…", "Understanding key ideas…", "Creating your quiz…", "Ready!"][stage]);
+      setLabelVisible(true);
+    }, 200);
+    return () => clearTimeout(id);
+  }, [stage]);
+
   return (
     <section className="flex flex-1 flex-col justify-center">
       <p className="mb-3 text-sm font-medium uppercase tracking-[0.12em] text-[var(--muted)]">Generating your quiz</p>
       <h2 className="font-display text-5xl leading-none">{book.title}</h2>
       <p className="mt-3 text-base text-[var(--muted)]">{book.authors.join(", ") || "Unknown author"}</p>
-      <div className="mt-8 space-y-3">
-        <div className="h-4 w-5/6 animate-pulse rounded bg-[var(--line)]" />
-        <div className="h-4 w-2/3 animate-pulse rounded bg-[var(--line)]" />
-        <div className="mt-6 h-12 animate-pulse rounded-md bg-[var(--line)]" />
-        <div className="h-12 animate-pulse rounded-md bg-[var(--line)]" />
+
+      {/* Skeleton — dimmed */}
+      <div className="mt-8 space-y-3 opacity-40">
+        <div className="h-4 w-5/6 rounded bg-[var(--line)]" />
+        <div className="h-4 w-2/3 rounded bg-[var(--line)]" />
+        <div className="mt-6 h-12 rounded-md bg-[var(--line)]" />
+        <div className="h-12 rounded-md bg-[var(--line)]" />
+      </div>
+
+      {/* Progress bar + status — below skeleton, fades out when ready */}
+      <div
+        className="mt-8 flex flex-col items-center"
+        style={{ opacity: overlayExiting ? 0 : 1, transition: "opacity 400ms ease" }}
+      >
+        <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-[var(--line)]">
+          <div
+            className="absolute inset-y-0 left-0 rounded-full bg-[var(--foreground)]"
+            style={{
+              width: `${progress}%`,
+              transition:
+                progress === 0 ? "none" :
+                progress >= 100 ? "width 500ms cubic-bezier(0.4,0,0.2,1)" :
+                "width 200ms linear",
+            }}
+          />
+        </div>
+        <p
+          className="mt-3 text-sm text-[var(--muted)]"
+          style={{
+            opacity: labelVisible ? 1 : 0,
+            transform: labelVisible ? "translateY(0)" : "translateY(-6px)",
+            transition: "opacity 200ms ease, transform 200ms ease",
+          }}
+        >
+          {label}
+        </p>
       </div>
     </section>
   );
@@ -281,10 +418,14 @@ function QuizScreen({ state, onChoose, onNext }: { state: State; onChoose: (inde
               onClick={() => onChoose(index)}
               disabled={answered}
               className={[
-                "w-full rounded-md border bg-[var(--panel)] p-4 text-left text-base leading-snug transition",
-                showCorrect ? "border-[var(--accent)] bg-[var(--accent-weak)]" : "",
-                showIncorrect ? "border-[var(--danger)] bg-[var(--danger-weak)]" : "",
-                !answered ? "border-[var(--line)] hover:border-[var(--accent)]" : "border-[var(--line)]",
+                "w-full rounded-md border p-4 text-left text-base leading-snug transition",
+                showCorrect
+                  ? "border-green-300 bg-green-50 text-[var(--foreground)]"
+                  : showIncorrect
+                  ? "border-orange-300 bg-orange-50 text-[var(--foreground)]"
+                  : answered
+                  ? "border-[var(--line)] bg-[var(--panel)] opacity-50"
+                  : "border-[var(--line)] bg-[var(--panel)] hover:border-[var(--accent)]",
               ].join(" ")}
             >
               {option}
@@ -294,7 +435,12 @@ function QuizScreen({ state, onChoose, onNext }: { state: State; onChoose: (inde
       </div>
 
       {answered && (
-        <div className="mt-6 rounded-md border border-[var(--line)] bg-[var(--panel)] p-4">
+        <div className={[
+          "mt-6 rounded-md border p-4",
+          state.selectedIndex === question.correctIndex
+            ? "border-green-200 bg-green-50"
+            : "border-orange-200 bg-orange-50",
+        ].join(" ")}>
           <p className="text-sm font-semibold text-[var(--foreground)]">
             {state.selectedIndex === question.correctIndex ? "Correct" : "Not quite"}
           </p>
@@ -312,6 +458,16 @@ function QuizScreen({ state, onChoose, onNext }: { state: State; onChoose: (inde
   );
 }
 
+function scoreMessage(score: number, total: number): string {
+  if (score === total) return "Perfect score. You really got this one.";
+  const ratio = score / total;
+  if (ratio >= 0.8) return "Nice. You've retained most of it. Just a couple to clean up.";
+  if (ratio >= 0.6) return "Solid understanding. A few gaps left worth tightening.";
+  if (ratio >= 0.3) return "You've got the basics, but some key ideas slipped.";
+  if (score === 0) return "Looks like a lot didn't stick yet. Good time to revisit and lock it in.";
+  return "A lot slipped this time. Worth a quick revisit while it's fresh.";
+}
+
 function DoneScreen({ quiz, score, onReset }: { quiz: Quiz; score: number; onReset: () => void }) {
   return (
     <section className="flex flex-1 flex-col justify-center">
@@ -320,7 +476,7 @@ function DoneScreen({ quiz, score, onReset }: { quiz: Quiz; score: number; onRes
         {score}/{quiz.questions.length}
       </h2>
       <p className="mt-4 text-base leading-7 text-[var(--muted)]">
-        You finished the quiz. The best missed answers are worth revisiting while the book is still fresh.
+        {scoreMessage(score, quiz.questions.length)}
       </p>
       <button
         type="button"
